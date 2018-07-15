@@ -1,14 +1,10 @@
 <template>
     <div id="type-challenge">
-        <!-- <form> -->
-            <input @keyup.enter.prevent="newSearch($event)" placeholder="Enter a Topic"/>
-        <!-- </form> -->
-        <p>REDIRECT</p>
+        <input @keyup.enter.prevent="newSearch($event)" placeholder="Enter a Topic"/>
         <p><em>{{ redirectText }}</em></p>
-        <p>ERROR</p>
         <p><b>{{ errorText }}</b></p>
-        <p>TEST</p>
-        <div id="typeArea" tabindex="0" @keydown="newKeyPress($event)" style="">
+        <div id="timer"></div>
+        <div id="typeArea" tabindex="0" @keydown.prevent="newKeyPress($event)" style="">
             <span v-for="(c, i) in currentText" :id="'char-' + i" :key="searchNum + '-' + i">{{ c }}</span>
         </div>
     </div>
@@ -30,7 +26,7 @@ export default {
             errorText: '',
             currentText: '',
             emergencyBoolCosImRecursingInGetBriefText: false,
-            allowedChars: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!"£$%^&*()\'"[]-+_-\\,./',
+            allowedChars: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!"£$%^&*()\'"[]-+_-\\,./:',
             charIndex: 0,
             searchNum: 0,
         }
@@ -104,6 +100,15 @@ export default {
 
             // Remove remaining tags while preserving inner text
             html = this.strip(html);
+
+            // Get rid of annoying characters (IS THIS SENSIBLE METHOD!?!?!?!?!?!)
+            let i = 0
+            while(html.indexOf(String.fromCharCode(160) != -1) && i < 50) {
+                html = html.replace(String.fromCharCode(160), ' ');
+                console.log(html.indexOf(String.fromCharCode(160)))
+                i += 1
+            }
+            html = html.replace(/\s\s+/g, ' ');
             this.currentText = html;
             this.charIndex = 0;
             this.searchNum += 1;
@@ -115,6 +120,12 @@ export default {
 
         // TYPING METHODS
         newKeyPress: function(e) {
+            console.log(e)
+            // Start Section if ctrl + ente
+            // Weird behaviour if backspace to 0 after starting?
+            if(e['key'] == 'Enter' && e['ctrlKey'] && this.charIndex == 0)  {
+                console.log('STARTING ')
+            }
             let typedChar = e['key']
             // Move back one char if backspace
             if(typedChar == 'Backspace' && this.charIndex > 0) {
