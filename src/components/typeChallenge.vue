@@ -1,12 +1,19 @@
 <template>
     <div id="type-challenge">
-        <input @keyup.enter.prevent="newSearch($event)" placeholder="Enter a Topic"/>
+        <input @keyup.enter.prevent="newGame($event)" placeholder="Enter a Topic"/>
         <p><em>{{ redirectText }}</em></p>
         <p><b>{{ errorText }}</b></p>
         <div id="timer"></div>
-        <div id="typeArea" tabindex="0" @keydown.prevent="newKeyPress($event)" style="">
-            <span v-for="(c, i) in currentText" :id="'char-' + i" :key="searchNum + '-' + i">{{ c }}</span>
+        <div id="prevTypeArea">
+            <span></span>
         </div>
+        <div id="typeArea" tabindex="0" @keydown.prevent="newKeyPress($event)" style="">
+            <span v-for="(c, i) in currentText" :id="'char-' + searchNum + '-' + i" :key="searchNum + '-' + i">{{ c }}</span>
+        </div>
+        <div id="nextTypeArea">
+            <span></span>
+        </div>
+        <button @click="testFunctionNextSection"> TESTING SECTION PROGRESSION</button>
     </div>
 </template>
 
@@ -26,19 +33,31 @@ export default {
             errorText: '',
             currentText: '',
             emergencyBoolCosImRecursingInGetBriefText: false,
-            allowedChars: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!"£$%^&*()\'"[]-+_-\\,./:',
+            allowedChars: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!"£$%^&*()\'"[]-+_-\\,./:;@#~{}<>',
             charIndex: 0,
             searchNum: 0,
+            sections: [],
         }
     },
     methods: {
+        // GAME CONTROLLER
+        testFunctionNextSection: function() {
+            document.getElementById('prevTypeArea').innerHTML = document.getElementById('typeArea').innerHTML
+            
+        },
+        newGame(e) {
+            this.newSearch(e)
+
+            // ASYCHRONOUS FUCKERY, so will have to daisy-chain methods from here
+            this.getBriefText()
+        },
+
         // API METHODS
         newSearch: function(e) {
             console.log('hi')
             console.log(e.target.value)
             this.redirectText = ''
             this.rawSearchTerm = e.target.value;
-            this.getBriefText();
         },
         getBriefText: function() {
             // Get Json and set Title and Html variables from it
@@ -72,10 +91,11 @@ export default {
         // What to do with redirects?
         // What to do with bad search term or failed request?
         getSectionsData: function() {
+            
             this.$http.get(this.articleAllSectionsUrl).then(function(data){
-                this.sections = JSON.parse(data['bodyText'])['parse']['sections'];
-                // Move further reading to it's own variable
-                this.furtherReading = this.sections.pop();
+                let sectionsData = JSON.parse(data['bodyText'])['parse']['sections'];
+                
+                // 
             })
         },
         // What to do with sections?
@@ -99,17 +119,20 @@ export default {
             }
 
             // Remove remaining tags while preserving inner text
-            html = this.strip(html);
+            let text = this.strip(html);
 
             // Get rid of annoying characters (IS THIS SENSIBLE METHOD!?!?!?!?!?!)
             let i = 0
-            while(html.indexOf(String.fromCharCode(160) != -1) && i < 50) {
-                html = html.replace(String.fromCharCode(160), ' ');
-                console.log(html.indexOf(String.fromCharCode(160)))
+            while(text.indexOf(String.fromCharCode(160) != -1) && i < 500) {
+                text = text.replace(String.fromCharCode(160), ' ');
+                console.log(text.indexOf(String.fromCharCode(160)))
                 i += 1
             }
-            html = html.replace(/\s\s+/g, ' ');
-            this.currentText = html;
+            text = text.replace(/\s\s+/g, ' ');
+            text = text.replace(/–/g, '-');
+            this.currentText = text;
+            // Click the element so user can type, not sure where else to put this
+            document.getElementById("typeArea").focus();
             this.charIndex = 0;
             this.searchNum += 1;
         },
@@ -183,7 +206,7 @@ export default {
         },
         
         currentCharId: function() {
-            return 'char-' + this.charIndex
+            return 'char-' + this.searchNum + '-' + this.charIndex
         },
         // TYPING COMPUTED PROPERTIES
         currentChar: function() {
@@ -197,23 +220,23 @@ export default {
 <style scoped>
 body{
     margin: 0;
-    font-family: 'Nunito SemiBold';
+    font-family: 'Monospace';
 }
 #type-challenge {
     margin: auto;
     width: 70%;
     padding: 10px;
 }
-#typeArea {
-    border: 3px solid green;
+#type-challenge div {
+    border: 2px solid green;
 }
-#typeArea .color-correct {
+#type-challenge div .color-correct {
     background: lightgreen;
 }
-#typeArea .color-incorrect {
+#type-challenge div .color-incorrect {
     background: orangered;
 }
-#typeArea .color-invalid {
+#type-challenge div .color-invalid {
     background: lightslategrey;
 }
 
