@@ -3,17 +3,12 @@
         <input @keyup.enter.prevent="newGame($event)" placeholder="Enter a Topic"/>
         <p><em>{{ redirectText }}</em></p>
         <p><b>{{ errorText }}</b></p>
-        <div id="timer"></div>
-        <div id="prevTypeArea">
-            <span></span>
-        </div>
         <div id="typeArea" tabindex="0" @keydown.prevent="newKeyPress($event)" style="">
-            <span v-for="(c, i) in currentText" :id="'char-' + searchNum + '-' + i" :key="searchNum + '-' + i">{{ c }}</span>
+            <span v-for="(c, i) in currentText" :id="'char-' + sectionNum + '-' + i" :key="sectionNum + '-' + i">{{ c }}</span>
         </div>
         <div id="nextTypeArea">
-            <span></span>
+            <span>{{ nextText }}</span>
         </div>
-        <button @click="testFunctionNextSection"> TESTING SECTION PROGRESSION</button>
     </div>
 </template>
 
@@ -32,20 +27,31 @@ export default {
             redirectText: '',
             errorText: '',
             currentText: '',
+            nextText: '',
             emergencyBoolCosImRecursingInGetBriefText: false,
             allowedChars: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!"£$%^&*()\'"[]-+_-\\,./:;@#~{}<>',
             charIndex: 0,
-            searchNum: 0,
+            sectionNum: 0,
             sections: [],
+            maxSampleSize: 500,
         }
     },
     methods: {
         // GAME CONTROLLER
-        testFunctionNextSection: function() {
-            document.getElementById('prevTypeArea').innerHTML = document.getElementById('typeArea').innerHTML
+        nextSection: function() {
+            console.log('NEXT SECTION')
+            let newPrevTypeDiv = '<div class="prevType" id="prevTypeArea' + this.sectionNum + '"></div>'
+            let typeArea = document.getElementById('typeArea')
+            typeArea.insertAdjacentHTML('beforebegin', newPrevTypeDiv)
+            document.getElementById('prevTypeArea'+this.sectionNum).innerHTML = typeArea.innerHTML;
+            this.charIndex = 0
+            this.sectionNum += 1;
+            this.currentText = this.sections[this.sectionNum]['text'];
+            this.nextText = this.sections[this.sectionNum + 1]['text'];
+
             
         },
-        newGame(e) {
+        newGame: function(e) {
             this.newSearch(e)
 
             // ASYCHRONOUS FUCKERY, so will have to daisy-chain methods from here
@@ -92,11 +98,13 @@ export default {
         // What to do with bad search term or failed request?
         getSectionsData: function() {
             
-            this.$http.get(this.articleAllSectionsUrl).then(function(data){
-                let sectionsData = JSON.parse(data['bodyText'])['parse']['sections'];
-                
-                // 
-            })
+            // this.$http.get(this.articleAllSectionsUrl).then(function(data){
+            //     let sectionsData = JSON.parse(data['bodyText'])['parse']['sections'];
+            //     console.log(sectionsData)
+            //     for(i in sectionsData) {
+
+            //     } 
+            // })
         },
         // What to do with sections?
         getSectionText: function(html) {
@@ -130,11 +138,28 @@ export default {
             }
             text = text.replace(/\s\s+/g, ' ');
             text = text.replace(/–/g, '-');
-            this.currentText = text;
+
+            this.chopAndSectionText(text)
+            this.getSectionsData();
+            this.currentText = this.sections[this.sectionNum]['text'];
+            this.nextText = this.sections[this.sectionNum + 1]['text'];
             // Click the element so user can type, not sure where else to put this
             document.getElementById("typeArea").focus();
             this.charIndex = 0;
-            this.searchNum += 1;
+        },
+        chopAndSectionText: function(text){
+            this.sections.push({'text': ''})
+            let sentences = text.split('. ')
+            for(let i in sentences) {
+                let sentence = sentences[i] + '. '
+                console.log(sentence)
+                if(this.sections[this.sections.length - 1]['text'].length + sentence.length > this.maxSampleSize) {
+                    this.sections[this.sections.length - 1]['text'].trim()
+                    this.sections.push({'text': ''})
+                }
+                this.sections[this.sections.length - 1]['text'] += sentence
+            }
+            
         },
         strip: function(html) {
             var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -146,6 +171,9 @@ export default {
             console.log(e)
             // Start Section if ctrl + ente
             // Weird behaviour if backspace to 0 after starting?
+            if(e['key'] == 'Enter' && this.charIndex >= this.currentText.length - 1){
+                this.nextSection()
+            }
             if(e['key'] == 'Enter' && e['ctrlKey'] && this.charIndex == 0)  {
                 console.log('STARTING ')
             }
@@ -206,7 +234,7 @@ export default {
         },
         
         currentCharId: function() {
-            return 'char-' + this.searchNum + '-' + this.charIndex
+            return 'char-' + this.sectionNum + '-' + this.charIndex
         },
         // TYPING COMPUTED PROPERTIES
         currentChar: function() {
@@ -228,6 +256,9 @@ body{
     padding: 10px;
 }
 #type-challenge div {
+    border: 2px solid green;
+}
+.prevType {
     border: 2px solid green;
 }
 #type-challenge div .color-correct {
