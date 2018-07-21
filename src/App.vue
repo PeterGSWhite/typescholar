@@ -1,16 +1,22 @@
 <template>
     <div>
-        <type-challenge></type-challenge>
+        <page-header></page-header>
+        <typing-game></typing-game>
+        <page-footer></page-footer>
         <!-- <router-view></router-view> -->
     </div>
 </template>
 
 <script>
 // Imports
-import typeChallenge from './components/typeChallenge.vue';
+import typingGame from './components/typingGame.vue';
+import pageHeader from './components/pageHeader.vue';
+import pageFooter from './components/pageFooter.vue';
 export default {
     components: {
-      'type-challenge': typeChallenge
+      'page-footer': pageFooter, 
+      'typing-game': typingGame,
+      'page-header': pageHeader,
     },
     data () {
         return {
