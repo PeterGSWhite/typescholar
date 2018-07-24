@@ -1,36 +1,52 @@
 <template>
  <div id="typingGame">
-    <input v-model="searchTerm"/>
-    <button @click="startGame">TEST</button>
-    <button @click="nextSection">Next</button>
-    <div id="typeArea" tabindex="0" @keydown.prevent="newKeyPress($event)" style="">
+    <div id="controls">
+      <span v-show="!gameStarted"><h4>Enter a Search term!</h4></span>
+      <span v-show="gameStarted && !sectionComplete"><h4>Start Typing!</h4></span>
+      <span v-show="gameStarted && sectionComplete"><h4>Press Enter To Load More Text...</h4></span>
+      <input v-show="!gameStarted" v-model="searchTerm" @keyup.enter="startGame"/>
+      <button v-show="!gameStarted" @click="startGame">START</button>
+    </div>
+    <div id="messages" v-show="gameStarted">
+      <span>{{ errorText }}</span>
+      <span><b>{{ articleTitle }}</b></span>
+      <span>- {{ redirectText }}</span>
+    </div>
+    <div id="typeRow" v-show="gameStarted">
+      <div id="typeArea" tabindex="0" @keydown.prevent="newKeyPress($event)" style="">
         <span v-for="(w, i) in sections[activeSection]" :id="'word-' + activeSection + '-' + i" :class="'index_'+w[1]" :key="activeSection + '-' + i">
             <span v-for="(c, j) in w[0]" :id="'char-' + activeSection + '-' + (w[2] + j)" :key="activeSection + '-' + i + '-' + j">{{ c }}</span>
         </span>
+        <span v-show="!sections">Loading...</span>
+      </div>
+      <div id="feedback-display">
+        <span id="stopwatch-display">Time: {{ activeStopwatch }} s</span>
+        <br>
+        <span id="wpm-display">Speed: {{ activeWPM }} WPM</span>
+        <br>
+        <span id="accuracy-display">Accuracy: {{ activeAccuracy }}%</span>
+      </div>
+    </div> 
+    <div id="resetControls" v-show="gameStarted">
+        <input v-model="searchTerm" @keyup.enter="resetGame"/>
+        <button @click="resetGame">CHOOSE A NEW TOPIC (RESET)</button>
     </div>
-    <div id="feedback-display">
-      <span id="stopwatch-display">{{ activeStopwatch }} s</span>
-      <br>
-      <span id="wpm-display">{{ activeWPM }} WPM</span>
-      <br>
-      <span id="accuracy-display">{{ activeAccuracy }}% Accuracy</span>
-    </div>
-    {{ errorText }}
-    {{ redirectText }}
-    {{ text }}
 </div>
 </template>
 
 <script>
 // Imports
 import completeSection from "./completeSection.vue";
+import Vue from 'vue';
 export default {
   components: {
     completeSection: completeSection,
   },
   data() {
     return {
-      searchTerm: "coffeehouse",
+      searchTerm: "Fun",
+      articleTitle: "",
+      gameStarted: false,
       text: "",
       errorText: "",
       redirectText: "",
@@ -41,11 +57,12 @@ export default {
       urlBase1: "&prop=text&format=json&origin=*&page=",
       maxSectionSize: 250,
       allowedChars:
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!?"£$%^&*()\'"[]-+_-\\,./:;@#~{}<>',
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!?"£$%^&*()\'"[]-+_-=\\,./:;@#~{}<>',
       //
       activeSection: 0,
       charIndex: 0,
       activeWPM: 0,
+      activeStopwatchRaw: 0,
       activeStopwatch: 0,
       activeAccuracy: 0,
       sectionComplete: false,
@@ -53,18 +70,38 @@ export default {
     }
   },
   methods: {
-    nextSection: function() {
-      // spawn element for existing section as history
+    resetGame: function() {
+      this.text = ""
+      this.errorText =  ""
+      this.redirectText = ""
+      this.sections = []
+      this.sectionLengths = []
+      this.activeSection = 0
+      this.charIndex = 0
+      this.activeWPM = 0
+      this.activeStopwatchRaw = 0
+      this.activeStopwatch = 0
+      this.activeAccuracy = 0
+      this.sectionComplete = false
+      this.accuracyTuple = [0, 0]
+      this.startGame()
+    },
+    nextSection: async function() {
+      // Move to next section
       this.activeSection++;
       this.charIndex = 0;
       document.getElementById("typeArea").focus();
       this.activeWPM = 0;
+      this.activeStopwatchRaw = 0;
       this.activeStopwatch = 0;
       this.accuracyTuple = [0, 0];
       this.sectionComplete = false;
       this.runStopwatch(this.activeSection);
+      await this.populateExtraSections(this.activeSection+2,this.activeSection+2);
     },
     startGame: async function() {
+      this.gameStarted = true;
+      this.articleTitle = this.searchTerm;
       let url = this.urlBase0 + "0" + this.urlBase1 + this.searchTerm;
       let body = await this.getSectionBody(url);
       // If redirect, deal get the real body
@@ -76,6 +113,7 @@ export default {
           0,
           redirectStringStart.indexOf("\\")
         );
+        this.articleTitle = redirectSearchTerm;
         let redurectUrl =
           this.urlBase0 + "0" + this.urlBase1 + redirectSearchTerm;
         body = await this.getSectionBody(redurectUrl);
@@ -95,7 +133,7 @@ export default {
       document.getElementById("typeArea").focus();
       this.runStopwatch(this.activeSection);
       // call function to populate other sections
-      await this.populateExtraSections();
+      await this.populateExtraSections(1,3);
     },
 
     getSectionBody: function(url) {
@@ -116,16 +154,16 @@ export default {
     // !!!!! DO SOMETHING FOR REFERENCES NOTES EXTERNALLINKS SEEALSO !!!!!
     // function to parse usable text out of response
     // function to split text into sections
-    populateExtraSections: async function() {
-      let sectionNum = 1;
-      let emergencyBreakN = 100;
+    populateExtraSections: async function(start, end) {
+      let sectionNum = start;
       let bodyText = "";
       let url;
       while (
         bodyText.indexOf("nosuchsection") == -1 &&
-        sectionNum < emergencyBreakN
+        sectionNum < end
       ) {
         url = this.urlBase0 + sectionNum + this.urlBase1 + this.searchTerm;
+        console.log(url)
         if (bodyText) {
           let article_text = this.getTextFromResponse(bodyText);
 
@@ -180,10 +218,10 @@ export default {
     // function to split text into sections of less than max size
     splitAndSectionText: function(inputtext) {
       let outputtext = "";
-      let sentences = inputtext.split(". ");
+      let sentences = inputtext.split(".");
       for (let i in sentences) {
-        let sentence = sentences[i];
-        sentence = sentence.indexOf(".") == -1 ? sentence + ". " : sentence;
+        let sentence = sentences[i].trim();
+        sentence = sentence + ". " //sentence.indexOf(".") == -1 ? sentence + ". " : sentence;
         if (outputtext.length + sentence.length < this.maxSectionSize) {
           outputtext += sentence;
         } else if (!outputtext) {
@@ -314,20 +352,25 @@ export default {
     },
     runStopwatch: function(sectionIndex) {
       if (!this.sectionComplete) {
-        let t = setTimeout(() => this.addToStopwatch(sectionIndex), 1000);
+        let t = setTimeout(() => this.addToStopwatch(sectionIndex), 10);
       }
     },
     addToStopwatch: function(sectionIndex) {
-      this.activeStopwatch ++;
-      this.updateWPM();
-      this.updateAccuracy();
-      this.runStopwatch(sectionIndex);
+      if (!this.sectionComplete) {
+        this.activeStopwatchRaw += 0.01;
+        this.activeStopwatch = Math.floor(this.activeStopwatchRaw)
+        this.updateWPM();
+        this.updateAccuracy();
+        this.runStopwatch(sectionIndex);
+      }
     },
     updateWPM: function() {
-      let parentSpanIdBits = this.currentCharEl.parentElement.id.split('-');
-      let wordIndex = parseInt(parentSpanIdBits[parentSpanIdBits.length - 1]);
-      let wpm = Math.ceil((60/this.activeStopwatch) * wordIndex);
-      this.activeWPM = wpm;
+      if(this.currentChar) {
+        let parentSpanIdBits = this.currentCharEl.parentElement.id.split('-');
+        let wordIndex = parseInt(parentSpanIdBits[parentSpanIdBits.length - 1]);
+        let wpm = Math.ceil((60/this.activeStopwatch) * wordIndex);
+        this.activeWPM = wpm;
+      }
     },
     updateAccuracy: function() {
       let accuracy;
@@ -362,7 +405,12 @@ export default {
       return document.getElementById(this.currentCharId);
     },
     currentChar: function() {
-      return this.currentCharEl.innerText;
+      if(this.currentCharEl) {
+        return this.currentCharEl.innerText;
+      }
+      else {
+        return ''
+      }
     }
   }
 };
@@ -371,16 +419,64 @@ export default {
 <style>
 body {
   margin: 0;
+  font-size: 1.5em;
   font-family: "Monospace";
 }
 #typingGame {
-  margin: auto;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-content: center;
+  margin: auto;
+}
+#typingHistory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: auto;
+}
+#typeRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: auto;
+}
+#controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: auto;
+}
+#resetControls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: auto;
+}
+#messages {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: auto;
+}
+#messages span {
+  margin: 0.1em;
+}
+#controls input {
+  margin: 1em;
 }
 #typeArea {
-  width: 70%;
+  font-size: 1.5em;
+  min-width: 30em;
+  max-width: 30em;
   border: 2px solid green;
 }
+#feedback-display {
+  padding: 1%;
+  flex-grow: 1;
+  position: t;
+}
+
 .prevType {
   border: 2px solid green;
 }
@@ -392,9 +488,5 @@ body {
 }
 .index_-1 {
   background: lightslategrey;
-}
-#feedback-display {
-  padding: 1%;
-  flex-grow: 1;
 }
 </style>
