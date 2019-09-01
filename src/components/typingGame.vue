@@ -22,7 +22,7 @@
       <div id="feedback-display">
         <span id="stopwatch-display">Time: {{ activeStopwatch }} s</span>
         <br>
-        <span id="wpm-display">Speed: {{ activeWPM }} WPM</span>
+        <span id="wpm-display">Speed: {{ lastWPM ? lastWPM + ' WPM' : '-'}} </span>
         <br>
         <span id="accuracy-display">Accuracy: {{ activeAccuracy }}%</span>
       </div>
@@ -59,8 +59,10 @@ export default {
       allowedChars:
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890!?"£$%^&*()\'"[]-+_-=\\,./:;@#~{}<>',
       //
+      stopwatch: null,
       activeSection: 0,
       charIndex: 0,
+      lastWPM: 0,
       activeWPM: 0,
       activeStopwatchRaw: 0,
       activeStopwatch: 0,
@@ -71,6 +73,7 @@ export default {
   },
   methods: {
     resetGame: function() {
+      clearInterval(this.stopwatch);
       this.text = ""
       this.errorText =  ""
       this.redirectText = ""
@@ -78,6 +81,7 @@ export default {
       this.sectionLengths = []
       this.activeSection = 0
       this.charIndex = 0
+      this.lastWPM = 0
       this.activeWPM = 0
       this.activeStopwatchRaw = 0
       this.activeStopwatch = 0
@@ -88,15 +92,18 @@ export default {
     },
     nextSection: async function() {
       // Move to next section
+      console.log(this.sections[this.activeSection].length)
+      this.lastWPM = Math.floor(60*this.sections[this.activeSection].length/this.activeStopwatchRaw);
+      console.log('wpm ' + this.lastWPM)
+      this.activeWPM = 0
       this.activeSection++;
       this.charIndex = 0;
       document.getElementById("typeArea").focus();
-      this.activeWPM = 0;
       this.activeStopwatchRaw = 0;
       this.activeStopwatch = 0;
       this.accuracyTuple = [0, 0];
       this.sectionComplete = false;
-      this.runStopwatch(this.activeSection);
+      this.runStopwatch();
       await this.populateExtraSections(this.activeSection+2,this.activeSection+2);
     },
     startGame: async function() {
@@ -131,7 +138,7 @@ export default {
       // function to populate sections with body text
       this.splitAndSectionText(article_text);
       document.getElementById("typeArea").focus();
-      this.runStopwatch(this.activeSection);
+      this.runStopwatch();
       // call function to populate other sections
       await this.populateExtraSections(1,3);
     },
@@ -179,7 +186,12 @@ export default {
     getTextFromResponse: function(body) {
       let html = JSON.parse(body)["parse"]["text"]["*"];
       // Lose the tables
+      let n = 0
       while (html.indexOf("</table>") !== -1) {
+        if(n > 20) {
+          break
+        }
+        n++
         let tabl = html.substring(
           html.indexOf("<table"),
           html.indexOf("</table>") + 8
@@ -212,6 +224,8 @@ export default {
       }
       text = text.replace(/\s\s+/g, " ");
       text = text.replace(/–/g, "-");
+      text = text.replace(/—/g, "-");
+      
       return text;
     },
 
@@ -275,10 +289,11 @@ export default {
     newKeyPress: function(e) {
       console.log(e);
       // Is the section completed?
-      if(this.charIndex >= this.sectionLengths[this.activeSection]) {
+      if(this.charIndex >= this.sectionLengths[this.activeSection] - 1) {
         console.log(this.charIndex)
         console.log('section', this.sections[this.activeSection]['words'])
         console.log('completed section')
+        clearInterval(this.stopwatch);
         this.sectionComplete = true;
       }
       if(this.sectionComplete) {
@@ -299,7 +314,7 @@ export default {
         if (typedChar == "Backspace" && this.charIndex > 0) {
           this.charIndex -= 1;
           if(this.currentCharEl.className == 'color-correct') {
-            this.accuracyTuple[0] --;
+            this.accuracyTuple[0]--;
             this.accuracyTuple[1]--;
           }
           this.clearColorClass();
@@ -350,19 +365,14 @@ export default {
       console.log(document.getElementById(id));
       document.getElementById(id).className = "";
     },
-    runStopwatch: function(sectionIndex) {
-      if (!this.sectionComplete) {
-        let t = setTimeout(() => this.addToStopwatch(sectionIndex), 10);
-      }
+    runStopwatch: function() {
+      console.log('start timer')
+      this.stopwatch = setInterval(this.addToStopwatch, 10);  
     },
-    addToStopwatch: function(sectionIndex) {
-      if (!this.sectionComplete) {
-        this.activeStopwatchRaw += 0.01;
-        this.activeStopwatch = Math.floor(this.activeStopwatchRaw)
-        this.updateWPM();
-        this.updateAccuracy();
-        this.runStopwatch(sectionIndex);
-      }
+    addToStopwatch: function() {
+      this.activeStopwatchRaw += 0.01;
+      this.activeStopwatch = Math.floor(this.activeStopwatchRaw)
+      this.updateAccuracy();
     },
     updateWPM: function() {
       if(this.currentChar) {
