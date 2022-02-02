@@ -4,7 +4,9 @@
 
   <p align="center">
     Practice touch typing with Wikipedia articles!
-    <br/>
+    <br/><br/>
+    I created this project when learning vanilla VueJS to see how far I could push having many reactive elements. <br/><br/>
+   
   </p>
 
 <!-- demonstration -->
